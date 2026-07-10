@@ -54,7 +54,7 @@
     }
     // ──────────────────────────────────────────────────────────────────
 
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     const T = {
       en: {
@@ -97,7 +97,7 @@
         errDates: "Please select at least one date.",
         errEventName: "Please enter an event name.",
         errNotFound: "Session not found. Check the code and try again.",
-        inviteMsg: (name, code) => `Join my event "${name}" on 揪Jo-in Us! Code: ${code}`,
+        inviteMsg: (name, code) => `Join my event "${name}" on 揪Jo-in Us! 🗓️\nCode: ${code}\n👉 https://chandy1000.github.io/Joinus/?code=${code}`,
         guideTitle: "Welcome to 揪Jo-in Us! 👋",
         guideSubtitle: "No more back-and-forth in the group chat. Here's how it works:",
         guideSteps: [
@@ -108,6 +108,12 @@
         ],
         guideBtn: "Let's go!",
         guideHint: "Tap ? anytime to see this again",
+        copyCode: "Copy code",
+        codeCopied: "Code copied!",
+        myEvents: "Your events",
+        hosted: "Hosted",
+        joined: "Joined",
+        removeEvent: "Remove",
       },
       zh: {
         appName: "揪Jo-in Us",
@@ -149,7 +155,7 @@
         errDates: "請至少選擇一個日期。",
         errEventName: "請輸入活動名稱。",
         errNotFound: "找不到該活動，請確認邀請碼是否正確。",
-        inviteMsg: (name, code) => `來加入「${name}」！在 揪Jo-in Us 輸入邀請碼：${code}`,
+        inviteMsg: (name, code) => `快來加入「${name}」！在 揪Jo-in Us 選出大家有空的日子 🗓️\n邀請碼：${code}\n👉 https://chandy1000.github.io/Joinus/?code=${code}`,
         guideTitle: "歡迎使用 揪Jo-in Us！👋",
         guideSubtitle: "不用再在群組裡一直問，幾個步驟就能找到大家都有空的日子：",
         guideSteps: [
@@ -160,6 +166,12 @@
         ],
         guideBtn: "開始揪！",
         guideHint: "隨時點 ? 重新查看說明",
+        copyCode: "複製邀請碼",
+        codeCopied: "已複製邀請碼！",
+        myEvents: "我的活動",
+        hosted: "主揪",
+        joined: "已加入",
+        removeEvent: "移除",
       }
     };
 
@@ -262,6 +274,52 @@
       const [error, setError] = useState("");
       const [loading, setLoading] = useState(false);
       const [copied, setCopied] = useState(false);
+      const [codeCopied, setCodeCopied] = useState(false);
+      const [myEvents, setMyEvents] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("mdf_my_events") || "[]"); } catch (e) { return []; }
+      });
+
+      function rememberEvent(code, name, role) {
+        setMyEvents(prev => {
+          const filtered = prev.filter(e => e.code !== code);
+          const next = [{ code, name, role, at: Date.now() }, ...filtered].slice(0, 20);
+          try { localStorage.setItem("mdf_my_events", JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+      }
+      function forgetEvent(code) {
+        setMyEvents(prev => {
+          const next = prev.filter(e => e.code !== code);
+          try { localStorage.setItem("mdf_my_events", JSON.stringify(next)); } catch (e) {}
+          return next;
+        });
+      }
+      async function openMyEvent(code) {
+        setLoading(true);
+        const data = await loadSession(code);
+        setLoading(false);
+        if (!data) { setError(t.errNotFound); return; }
+        setSession(data); setSessionCode(code); setView("respond"); setError("");
+      }
+
+      // Auto-open event when link contains ?code=XXXXXX
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const urlCode = params.get("code");
+        if (urlCode) {
+          const code = urlCode.trim().toUpperCase();
+          setLoading(true);
+          loadSession(code).then(data => {
+            setLoading(false);
+            if (data) {
+              setSession(data);
+              setSessionCode(code);
+              setShowGuide(false);
+              setView("respond");
+            }
+          });
+        }
+      }, []);
 
       function toggleDate(d) { setSelectedDates(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]); }
       function prevMonth() { if (calMonth === 0) { setCalYear(y => y-1); setCalMonth(11); } else setCalMonth(m => m-1); }
@@ -272,6 +330,7 @@
         const code = generateCode();
         const data = { name: eventName.trim(), responses: {}, createdAt: Date.now() };
         await saveSession(code, data);
+        rememberEvent(code, data.name, "hosted");
         setSessionCode(code); setSession(data); setView("share");
       }
 
@@ -281,6 +340,7 @@
         const data = await loadSession(joinCode.trim().toUpperCase());
         setLoading(false);
         if (!data) { setError(t.errNotFound); return; }
+        rememberEvent(joinCode.trim().toUpperCase(), data.name, "joined");
         setSession(data); setSessionCode(joinCode.trim().toUpperCase()); setView("respond"); setError("");
       }
 
@@ -314,6 +374,11 @@
       function copyInvite() {
         navigator.clipboard.writeText(t.inviteMsg(session?.name, sessionCode));
         setCopied(true); setTimeout(() => setCopied(false), 2000);
+      }
+
+      function copyCodeOnly() {
+        navigator.clipboard.writeText(sessionCode);
+        setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000);
       }
 
       const card = { background: c.surface, border: `0.5px solid ${c.border}`, borderRadius: 14, padding: "1.25rem 1.5rem" };
@@ -393,6 +458,20 @@
               <button style={{ ...btnSecondary, marginTop: 12 }} onClick={joinSession} disabled={loading}>{loading ? t.joining : t.joinBtn}</button>
             </div>
           </div>
+          {myEvents.length > 0 && (
+            <div style={{ ...card, marginTop: 12 }}>
+              <p style={{ fontWeight: 500, marginBottom: 10, fontSize: 15, color: c.text }}>{t.myEvents}</p>
+              {myEvents.map((ev, i) => (
+                <div key={ev.code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < myEvents.length - 1 ? `0.5px solid ${c.border}` : "none" }}>
+                  <div onClick={() => openMyEvent(ev.code)} style={{ flex: 1, cursor: "pointer" }}>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: c.text }}>{ev.name}</p>
+                    <p style={{ fontSize: 11, color: c.textFaint }}>{ev.role === "hosted" ? t.hosted : t.joined} · {ev.code}</p>
+                  </div>
+                  <button onClick={() => forgetEvent(ev.code)} style={{ background: "none", border: "none", color: c.textFaint, fontSize: 11, cursor: "pointer" }}>{t.removeEvent}</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
 
@@ -406,9 +485,10 @@
           <div style={card}>
             <p style={{ fontWeight: 500, fontSize: 15, marginBottom: 4, color: c.text }}>{session?.name}</p>
             <p style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{t.shareDesc}</p>
-            <div style={{ background: c.surfaceAlt, borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 16 }}>
+            <div onClick={copyCodeOnly} style={{ background: c.surfaceAlt, borderRadius: 10, padding: 16, textAlign: "center", marginBottom: 12, cursor: "pointer" }}>
               <p style={{ fontSize: 11, color: c.textFaint, marginBottom: 4, letterSpacing: 1 }}>{t.sessionCode}</p>
               <p style={{ fontSize: 32, fontWeight: 600, letterSpacing: 6, color: c.text }}>{sessionCode}</p>
+              <p style={{ fontSize: 12, color: codeCopied ? "#16a34a" : c.textFaint, marginTop: 6 }}>{codeCopied ? `✓ ${t.codeCopied}` : `📋 ${t.copyCode}`}</p>
             </div>
             <button style={{ ...btnPrimary, marginBottom: 10 }} onClick={copyInvite}>{copied ? t.copied : t.copyBtn}</button>
             <button style={btnSecondary} onClick={() => { setMyName(""); setSelectedDates([]); setView("respond"); }}>{t.addMyDates}</button>
@@ -427,7 +507,7 @@
           </div>
           {showGuide && <GuideModal />}
           <h2 style={{ fontSize: 18, fontWeight: 500, margin: "12px 0 2px", color: c.text }}>{session?.name}</h2>
-          <p style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{t.responded(totalResponders)} · {t.code}: <strong>{sessionCode}</strong></p>
+          <p style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{t.responded(totalResponders)} · {t.code}: <strong onClick={copyCodeOnly} style={{ cursor: "pointer", textDecoration: "underline dotted" }}>{sessionCode}</strong> {codeCopied && <span style={{ color: "#16a34a" }}>✓</span>}</p>
           {submitted ? (
             <div style={{ ...card, textAlign: "center" }}>
               <p style={{ fontSize: 28, marginBottom: 8 }}>✓</p>
@@ -462,7 +542,7 @@
           </div>
           {showGuide && <GuideModal />}
           <h2 style={{ fontSize: 18, fontWeight: 500, margin: "12px 0 2px", color: c.text }}>{session?.name}</h2>
-          <p style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{t.responded(totalResponders)} · {t.code}: <strong>{sessionCode}</strong></p>
+          <p style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{t.responded(totalResponders)} · {t.code}: <strong onClick={copyCodeOnly} style={{ cursor: "pointer", textDecoration: "underline dotted" }}>{sessionCode}</strong> {codeCopied && <span style={{ color: "#16a34a" }}>✓</span>}</p>
           <div style={{ ...card, marginBottom: 16 }}>
             <p style={{ fontWeight: 500, fontSize: 14, marginBottom: 12, color: c.text }}>{t.heatmapTitle}</p>
             <MonthNav />
