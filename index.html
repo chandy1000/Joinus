@@ -42,7 +42,7 @@
     //    create policy "public update" on sessions for update using (true);
     //
     const SUPABASE_URL = "https://xqvfdzzatugwqxcdwjbm.supabase.co";
-    const SUPABASE_ANON_KEY = "YOUR_NEW_ANON_KEY"; // 👈 paste your regenerated key here
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxdmZkenphdHVnd3F4Y2R3amJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODI0MjQsImV4cCI6MjA5NzM1ODQyNH0.qrUQV8HbFEGbXjaA0rXNiAN_hRuPa-RZfL3UUoxp3rA"; // 👈 paste your regenerated key here
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     async function saveSession(code, data) {
